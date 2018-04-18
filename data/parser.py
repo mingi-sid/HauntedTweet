@@ -28,7 +28,7 @@ class Parser():
                 else:
                     self._count[token] = 1
         self._freq = {token: cnt / self._totalcount for token, cnt in self._count.items()}
-        for key in sorted(self._freq.keys()):
+        for key in sorted(sorted(self._freq.keys()), key=self._freq.__getitem__, reverse=True):
             targetfile.write(str(key) + "\t" + str(self._freq[key]) + "\n")
 
     def get_data(self, targetfile):
