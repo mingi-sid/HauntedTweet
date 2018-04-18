@@ -28,7 +28,9 @@ class Preparser:
             else:
                 timestamp = match_tweet.group(1)
                 text = match_tweet.group(2).replace('""', '"')
-                if filter == False:
+                if timestamp == "timestamp" and text = "text":
+                    pass
+                elif filter == False:
                     self._result.append((timestamp, text))
                 else:
                     if "@" not in text:
@@ -40,6 +42,6 @@ class Preparser:
         "Save result as filename"
         if self._result == []:
             self.extract()
-        for timestamp, text in self._result:
+        for timestamp, text in reversed(self._result):
             savefile.write(timestamp + "\t" + text + "\n")
             
