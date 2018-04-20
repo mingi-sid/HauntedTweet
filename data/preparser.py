@@ -21,18 +21,20 @@ class Preparser:
             if prevtext == "":
                 text = line
             else:
-                text = prevtext[:-1] + "\\n" + line
+                text = prevtext[:-1] + " " + line
             match_tweet = regex_tweet.search(text)
             if match_tweet == None:
                 prevtext = text
             else:
                 timestamp = match_tweet.group(1)
                 text = match_tweet.group(2).replace('""', '"')
-                if filter == False:
+                if timestamp == "timestamp" and text == "text":
+                    pass
+                elif filter == False:
                     self._result.append((timestamp, text))
                 else:
                     if "@" not in text:
-                        self._result.append((timestamp, re.sub("https:\/\/t\.co\/\w+", "", text)))
+                        self._result.append((timestamp, re.sub("https?:\/\/t\.co\/\w+|#[\S]+", "", text)))
                 prevtext = ""
         return self._result
 
@@ -40,6 +42,6 @@ class Preparser:
         "Save result as filename"
         if self._result == []:
             self.extract()
-        for timestamp, text in self._result:
+        for timestamp, text in reversed(self._result):
             savefile.write(timestamp + "\t" + text + "\n")
             

@@ -107,3 +107,11 @@ venv.bak/
 # Personal data
 *.csv
 *.txt
+
+*.swp
+
+# Tensorflow save file
+checkpoint
+*.data-?????-of-?????
+*.index
+*.meta
