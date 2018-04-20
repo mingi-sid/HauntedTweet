@@ -109,3 +109,9 @@ venv.bak/
 *.txt
 
 *.swp
+
+# Tensorflow save file
+checkpoint
+*.data-?????-of-?????
+*.index
+*.meta
