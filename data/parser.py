@@ -20,6 +20,7 @@ class Parser():
             if text == "":
                 continue
             tokens = tagger.pos(text, norm=True)
+            tokens = [('<go>', 'Token')] + tokens + [('<eos>', 'Token')]
             self._tokens.append( [str(token) for token in tokens] )
             for token in tokens:
                 self._totalcount += 1
@@ -41,6 +42,7 @@ class Parser():
                 if text == "":
                     continue
                 tokens = tagger.pos(text, norm=True)
+                tokens = [('<go>', 'Token')] + tokens + [('<eos>', 'Token')]
                 self._tokens.append( [str(token) for token in tokens] )
         for line in self._tokens:
             targetfile.write("\t".join(line) + "\n")
