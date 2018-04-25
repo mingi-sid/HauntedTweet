@@ -124,8 +124,9 @@ class Word2Vec():
     def tf_run(self, num_steps, save_file_name, restore=True):
     #Run tensorflow session for given steps, and save the result.
         with tf.Session() as session:
-            if restore == True and os.path.isfile(save_file_name):
+            if restore == True:# and os.path.isfile(save_file_name):
                 self._saver.restore(session, save_file_name)
+                print("Save file loaded.")
             else:
                 session.run(self._init)
 
@@ -185,8 +186,12 @@ class Embeddings():
 
     def closest_word(self, vector):
         with tf.Session() as sess:
-            batch_array = tf.constant(vector, shape=[1, self._embedding_size])
+            norm_vector = tf.nn.l2_normalize(vector).eval()
+            batch_array = tf.constant(norm_vector, shape=[1, self._embedding_size])
             similarity = tf.matmul(batch_array, self._embeddings, transpose_b=True)
             nearest_preeval = tf.argmax(similarity, 1)
             nearest = nearest_preeval.eval()
             return self.code2word(nearest[0])
+    
+    def embedding_size(self):
+        return self._embedding_size
