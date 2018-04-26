@@ -16,6 +16,7 @@ class Word2Vec():
         self._code2word = dict()
         self._dataline = [""]
         self._dataindex = -1
+        self._filepos = tf.get_variable("w2v_filepos", initializer=tf.constant(0), dtype=tf.int32)
 
     def give_code(self):
     #give each word a number, from 1 to 50000 and save mapping at dictionary
@@ -41,6 +42,7 @@ class Word2Vec():
     def generate_batch(self, batch_size, window_size = 3):
     #From "token\ttoken" format file, create batch and labels array
         index = 0
+        self._file.seek(self._filepos.eval())
         batch = np.ndarray(shape=(batch_size), dtype=np.int32)
         labels = np.ndarray(shape=(batch_size, 1), dtype=np.int32)
         batch.fill(-1)
@@ -77,12 +79,15 @@ class Word2Vec():
             self._dataindex += 1
         #print(batch)
         #print(labels)
+        self._filepos = tf.assign(self._filepos, self._file.tell())
+        #print(self._file.tell(), self._filepos)
         return batch, labels
 
     def tf_init(self, embedding_size, batch_size, seed=1):
     #Initialize tensorflow variables.
-        np.random.seed(seed)
-        tf.set_random_seed(seed)
+        if seed != None:
+            np.random.seed(seed)
+            tf.set_random_seed(seed)
 
         self._batch_size = batch_size
         self._embedding_size = embedding_size
@@ -124,7 +129,7 @@ class Word2Vec():
     def tf_run(self, num_steps, save_file_name, restore=True):
     #Run tensorflow session for given steps, and save the result.
         with tf.Session() as session:
-            if restore == True:# and os.path.isfile(save_file_name):
+            if restore and os.path.isfile(save_file_name+".meta"):
                 self._saver.restore(session, save_file_name)
                 print("Save file loaded.")
             else:
@@ -156,7 +161,8 @@ class Word2Vec():
                             log_str = '%s %s,' % (log_str, close_word)
                         print(log_str)
 
-                self._saver.save(session, save_file_name)
+                if step % 10 == 0 or step == num_steps-1:
+                    self._saver.save(session, save_file_name)
             self._final_embeddings = self._normalized_embeddings.eval()
 
     def Embeddings(self):

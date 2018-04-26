@@ -20,14 +20,14 @@ class Word2VecTest(unittest.TestCase):
                 
                 self.W.give_code()
                 print("Gave code for tokens\n")
-                self.W.tf_init(32, 30)
+                self.W.tf_init(32, 192)
                 print("Initialized\n")
                 
-                print("1st run (100 steps)....")
-                self.W.tf_run(100, save_file, restore=False)
+                print("1st run (500 steps)....")
+                self.W.tf_run(500, save_file, restore=False)
                 print("done.\n")
-                print("2nd run (100 steps)....")
-                self.W.tf_run(100, save_file, restore=True)
+                print("2nd run (500 steps)....")
+                self.W.tf_run(500, save_file)
                 print("done.\n")
                 
                 self.E = self.W.Embeddings()

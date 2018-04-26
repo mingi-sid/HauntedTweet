@@ -21,26 +21,26 @@ class GeneratorTest(unittest.TestCase):
                 
                 W.give_code()
                 print("Gave code for tokens")
-                W.tf_init(32, 30, seed=3)
+                W.tf_init(32, 192)
                 print("Initialized")
                 
-                print("1st run (10 steps)....")
-                W.tf_run(10, w2v_save_file, restore=True)
+                print("1st run (100 steps)....")
+                W.tf_run(100, w2v_save_file, restore=True)
                 
                 E = W.Embeddings()
                 print("Made Embeddings instance")
                 del W
                 
-                G = Generator(E, 34)
+                G = Generator(E)
                 print("Made Generator instance")
-                G.nn_init(10, 16)
+                G.nn_init(batch_size=64, timesteps=32, hidden_size=64)
                 print("Initialized")
                 
                 print("1st run (100 steps)....")
                 G.train_real_data(100, data, gen_save_file, restore=False)
                 
                 print("2st run (100 steps)....")
-                G.train_real_data(100, data, gen_save_file, restore=True)
+                G.train_real_data(100, data, gen_save_file)
                 
                 print(G.generate(gen_save_file))
                 
