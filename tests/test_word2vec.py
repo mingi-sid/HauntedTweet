@@ -11,8 +11,8 @@ class Word2VecTest(unittest.TestCase):
     def test_short_run(self):
         token_data = os.path.join(os.path.dirname(sys.argv[0]), "test_parser_dataset.txt")
         freq_data = os.path.join(os.path.dirname(sys.argv[0]), "test_parser_result.txt")
-        with open(token_data) as data:
-            with open(freq_data) as freq:
+        with open(token_data, encoding='utf8') as data:
+            with open(freq_data, encoding='utf8') as freq:
                 self.W = Word2Vec(data, freq)
                 print("Made Word2Vec instance\n")
                 
@@ -23,11 +23,11 @@ class Word2VecTest(unittest.TestCase):
                 self.W.tf_init(32, 192)
                 print("Initialized\n")
                 
-                print("1st run (500 steps)....")
-                self.W.tf_run(500, save_file, restore=False)
+                print("1st run (100 steps)....")
+                self.W.tf_run(100, save_file, restore=False)
                 print("done.\n")
-                print("2nd run (500 steps)....")
-                self.W.tf_run(500, save_file)
+                print("2nd run (100 steps)....")
+                self.W.tf_run(100, save_file)
                 print("done.\n")
                 
                 self.E = self.W.Embeddings()
@@ -40,7 +40,7 @@ class Word2VecTest(unittest.TestCase):
                     s += w + " : " + str(self.E.word2vec(w)) + "\n"
                 print(s)
                 
-                self.E.closest_word(self.E.word2vec(self.E.code2word(self.E.word2code("('이', 'Josa')"))))
+                self.E.closest_word([self.E.word2vec(self.E.code2word(self.E.word2code("('이', 'Josa')")))])
              
                 
 

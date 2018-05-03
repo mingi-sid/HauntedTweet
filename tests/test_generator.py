@@ -11,8 +11,8 @@ class GeneratorTest(unittest.TestCase):
     def test_short_run(self):
         token_data = os.path.join(os.path.dirname(sys.argv[0]), "test_parser_dataset.txt")
         freq_data = os.path.join(os.path.dirname(sys.argv[0]), "test_parser_result.txt")
-        with open(token_data) as data:
-            with open(freq_data) as freq:
+        with open(token_data, encoding='utf8') as data:
+            with open(freq_data, encoding='utf8') as freq:
                 W = Word2Vec(data, freq)
                 print("Made Word2Vec instance")
                 
@@ -33,14 +33,14 @@ class GeneratorTest(unittest.TestCase):
                 
                 G = Generator(E)
                 print("Made Generator instance")
-                G.nn_init(batch_size=64, timesteps=32, hidden_size=64)
+                G.nn_init(batch_size=32, timesteps=32, hidden_size=64)
                 print("Initialized")
                 
-                print("1st run (100 steps)....")
-                G.train_real_data(100, data, gen_save_file, restore=False)
+                print("1st run (5 steps)....")
+                G.train_real_data(5, data, gen_save_file, restore=False)
                 
-                print("2st run (100 steps)....")
-                G.train_real_data(100, data, gen_save_file)
+                print("2st run (5 steps)....")
+                G.train_real_data(5, data, gen_save_file)
                 
                 print(G.generate(gen_save_file))
                 

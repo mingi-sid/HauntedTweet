@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from konlpy.tag import Twitter
+import random
 
 class Parser():
     def __init__(self, openfile):
@@ -44,5 +45,5 @@ class Parser():
                 tokens = tagger.pos(text, norm=True)
                 tokens = [('<go>', 'Token')] + tokens + [('<eos>', 'Token')]
                 self._tokens.append( [str(token) for token in tokens] )
-        for line in self._tokens:
+        for line in random.shuffle(self._tokens):
             targetfile.write("\t".join(line) + "\n")
