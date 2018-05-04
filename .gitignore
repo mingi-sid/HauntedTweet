@@ -112,6 +112,8 @@ venv.bak/
 
 # Tensorflow save file
 checkpoint
+checkpoint.tmp*
 *.data-?????-of-?????
 *.index
 *.meta
+*.meta.tmp*

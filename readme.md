@@ -6,9 +6,10 @@
 
 ### Prerequisites
 
-* Python 3.5
-* TensorFlow 1.0
+* Python
+* TensorFlow
 * KoNLPy
+* jpype1
 
 ### 설치
 
@@ -38,3 +39,9 @@ tests는 unittest를 이용한 테스트 코드 폴더입니다.
 
 
 
+
+## Hyper parameter 조절
+
+### Word2Vec
+
+초기에 낮은 window_size, 높은 subsampling 계수 T와 학습계수를 사용하다가 점점 높였/낮췄다.
