@@ -69,13 +69,17 @@ class Generator():
             #print("self.exag_probs", self.exag_probs)
             #print("self.exag_labels", self.exag_labels)
             self.weights = tf.constant([ [np.power(1/float(j), 0.5) for j in range(1, timesteps+1)] for i in range(batch_size)])
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.probs, labels=self.input_targets))
+            
+            cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.prediction, labels=self.input_targets)
+            mask = tf.sequence_mask(self.input_length, maxlen=timesteps, dtype=tf.float32)
+            
+            self.loss = tf.reduce_sum(mask*cross_entropy) / tf.reduce_sum(tf.cast(self.input_length, dtype=tf.float32))
             #self.loss = tf.reduce_mean(tf.norm(self.exag_probs-self.exag_labels))
         else:
             self.prediction = tf.reshape(tf.matmul(tf.reshape(self.output_tensor, [-1, hidden_size[-1]]), W) + b, [-1, timesteps, self.output_size])
             self.loss = tf.losses.cosine_distance(labels=self.input_targets, predictions=self.prediction, axis=2)
-        self.distance = tf.losses.mean_squared_error(self.prediction[:, :-1, :], self.prediction[:, 1:, :])
-        self.additional_loss = tf.exp(-(self.distance/1E+03 - 1))
+        #self.distance = tf.losses.mean_squared_error(self.prediction[:, :-1, :], self.prediction[:, 1:, :])
+        #self.additional_loss = tf.exp(-(self.distance/1E+03 - 1))
         #self.loss = self.loss + self.additional_loss
         self.optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self.loss)
         
@@ -98,8 +102,9 @@ class Generator():
                 datafile.seek(0, 0)
                 line = datafile.readline()
             input_tokens = line.strip().split('\t')
+            #input_tokens = [x for x in input_tokens if x != "('UNK', 'UNK')"]
             
-            input_length = len(input_tokens)-1 - 1
+            input_length = len(input_tokens)-1
             eos_vec = self.Embedding.word2vec("('<eos>', 'Token')")
             shifted_tokens = ( input_tokens[1:] + ["('<eos>', 'Token')"]*max(1, self.timesteps-input_length+1) )[:self.timesteps]
             input_labels = [self.Embedding.word2code(token) for token in shifted_tokens]
@@ -108,7 +113,7 @@ class Generator():
                 continue
             
             #Subsampling
-            appear_prob = 1
+            appear_prob = 1.0
             for token in input_labels:
                 appear_prob *= self.Embedding.codefreq(token)
             if np.random.random() < np.power(appear_prob, 1/float(self.timesteps)) / 7E-4 - 1:
@@ -144,19 +149,19 @@ class Generator():
             for step in range(num_steps):
                 input_vectors_l, input_length_l, input_targets_l = self.batch_real_data(datafile)
                 
-                _, loss, additional_loss = session.run([self.optimizer, self.loss, self.additional_loss],\
+                _, loss = session.run([self.optimizer, self.loss],\
                                     {self.input_vectors : input_vectors_l, self.input_length : input_length_l, self.input_targets : input_targets_l,\
-                                    self.keep_input : 0.5, self.keep_output : 0.5, self.keep_state : 0.5})
+                                    self.keep_input : 1.0, self.keep_output : 0.5, self.keep_state : 1.0})
                 #print(additional_loss)
                 total_loss += loss
                 loss_count += 1
-                if step % 10 == 0 or step == num_steps-1:
+                if step % 200 == 0 or step == num_steps-1:
                     print("average loss at {} = {}".format(step, total_loss / loss_count))
                     total_loss = 0.0
                     loss_count = 0
                     self.saver.save(session, save_file_name)
-                if step % 50 == 0:
-                    sentences = self.generate(None, 8)
+                if step % 5000 == 0:
+                    sentences = self.generate(None, self.batch_size)
                     for sentence in sentences:
                         print( ' '.join([token.split("'")[1] for token in sentence]) )
             
@@ -175,7 +180,7 @@ class Generator():
         eos_vec = self.Embedding.word2vec("('<eos>', 'Token')")
         initial_input = [ ( [go_vec] + [eos_vec]*max(1, self.timesteps-1) )[:self.timesteps] ] * self.batch_size
         input_words = [ ["('<go>', 'Token')"] for x in range(self.batch_size) ]
-        initial_state = [ tf.random_normal([self.batch_size, h_size], stddev=0.1).eval() for h_size in self.hidden_size ]
+        initial_state = [ tf.random_normal([self.batch_size, h_size], stddev=0.01).eval() for h_size in self.hidden_size ]
         
         if not self.use_vector:
             probs, state = session.run([self.probs, self.state], feed_dict={self.input_vectors : initial_input, self.input_length : [1] * self.batch_size, self.initial_state : initial_state})
@@ -194,11 +199,20 @@ class Generator():
             words = []
             for j in range(self.batch_size):
                 if not self.use_vector:
+                    #Only if UNK token is dominant, use UNK.
+                    if(new_word_prob[j, 0] > 0.99):
+                        words.append(self.Embedding.code2word(0))
+                        sentences[j].append(self.Embedding.code2word(0))
+                        continue
+                        
                     randfloat = np.random.random()
                     word_cumul_prob = 0
-                    prob_sum = sum(new_word_prob[j, :])
+                    prob_sum = sum(new_word_prob[j, 1:])
+                    prob_sum -= new_word_prob[j, self.Embedding.word2code("('<go>', 'Token')")]
                     #print(randfloat * prob_sum)
-                    for k in range(len(new_word_prob[j, :])):
+                    for k in range(1, len(new_word_prob[j, 1:])+1):
+                        if k == self.Embedding.word2code("('<go>', 'Token')"):
+                            continue
                         word_cumul_prob += new_word_prob[j, k]
                         if randfloat * prob_sum < word_cumul_prob: break
                 

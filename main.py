@@ -29,8 +29,8 @@ def main():
     
     embedding_size = 64
     word2vec_batch_size = 640
-    gen_batch_size = 32
-    gen_seq_length = 32
+    gen_batch_size = 48
+    gen_seq_length = 16
     gen_hidden_size = [64, 128]
     
     if "-i" in argdict:
@@ -73,7 +73,7 @@ def main():
                 gen_save_filename = join_filenames("saves", argdict["-G"])
                 gen_restore = os.path.isfile(gen_save_filename+".meta")
                 generator = Generator(embeddings)
-                generator.nn_init(gen_batch_size, gen_seq_length, gen_hidden_size, learning_rate = 1E-04, seed=None, use_vector=("-V" in argdict))
+                generator.nn_init(gen_batch_size, gen_seq_length, gen_hidden_size, learning_rate = 1E-05, seed=None, use_vector=("-V" in argdict))
                 generator.train_real_data(int(argdict["-g"]), tokenized_file_r, gen_save_filename, restore=gen_restore)
                 print(generator.generate(gen_save_filename, 2))
     
