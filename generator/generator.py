@@ -10,7 +10,7 @@ class Generator():
         self.embedding_size = Embedding.embedding_size()
         self.word_size = Embedding.word_size()
         
-    def nn_init(self, batch_size, timesteps, hidden_size, learning_rate = 0.001, seed=1, use_vector=False):
+    def nn_init(self, batch_size, timesteps, hidden_size, learning_rate = 1E-05, seed=1, use_vector=False):
         if seed != None:
             np.random.seed(seed)
             tf.set_random_seed(seed)
@@ -95,7 +95,11 @@ class Generator():
         datafile.seek(self.filepos.eval())
         count = 0
         while count < self.batch_size:
-            line = datafile.readline()
+            try:
+                line = datafile.readline()
+            except UnicodeDecodeError:
+                datafile.seek(0, 0)
+                line = datafile.readline()
             #print(line.strip())
             if line == "":
                 print("One epoch ended.")
@@ -104,13 +108,16 @@ class Generator():
             input_tokens = line.strip().split('\t')
             #input_tokens = [x for x in input_tokens if x != "('UNK', 'UNK')"]
             
-            input_length = len(input_tokens)-1
+            input_length = len(input_tokens) - 1
             eos_vec = self.Embedding.word2vec("('<eos>', 'Token')")
-            shifted_tokens = ( input_tokens[1:] + ["('<eos>', 'Token')"]*max(1, self.timesteps-input_length+1) )[:self.timesteps]
+            go_vec = self.Embedding.word2vec("('<go>', 'Token')")
+            shifted_tokens = ( input_tokens[1:] + ["('<go>', 'Token')"]*max(1, self.timesteps-input_length+1) )[:self.timesteps]
             input_labels = [self.Embedding.word2code(token) for token in shifted_tokens]
             input_targets = [ [1 if i==code else 0 for i in range(self.word_size)] for code in input_labels ]
+            #Randomly ignore sentence with UNK
             if 0 in input_targets:
-                continue
+                if np.random.random() < 0.0:
+                    continue
             
             #Subsampling
             appear_prob = 1.0
@@ -119,8 +126,8 @@ class Generator():
             if np.random.random() < np.power(appear_prob, 1/float(self.timesteps)) / 7E-4 - 1:
                 pass#continue
                 
-            input_vectors = ( [self.Embedding.word2vec(token) for token in input_tokens] + [eos_vec]*max(1, self.timesteps-input_length) )[:self.timesteps]
-            input_targets_vectors = input_vectors[1:] + [eos_vec]
+            input_vectors = ( [self.Embedding.word2vec(token) for token in input_tokens] + [go_vec]*max(1, self.timesteps-input_length) )[:self.timesteps]
+            input_targets_vectors = input_vectors[1:] + [go_vec]
             
             input_length_l.append(input_length)
             input_vectors_l.append(input_vectors)
@@ -155,98 +162,103 @@ class Generator():
                 #print(additional_loss)
                 total_loss += loss
                 loss_count += 1
-                if step % 200 == 0 or step == num_steps-1:
+                if step % 100 == 0 or step == num_steps-1:
                     print("average loss at {} = {}".format(step, total_loss / loss_count))
                     total_loss = 0.0
                     loss_count = 0
-                    self.saver.save(session, save_file_name)
-                if step % 5000 == 0:
-                    sentences = self.generate(None, self.batch_size)
+                if step % 1000 == 0:
+                    sentences = self.generate(None, 10)
                     for sentence in sentences:
                         print( ' '.join([token.split("'")[1] for token in sentence]) )
+                if step % 5 == 0:
+                    self.saver.save(session, save_file_name)
             
     def train_against(self):
         pass
         
     def generate(self, save_file_name, size = 1):
-        sentences = [ [] for x in range(self.batch_size)]
-        if save_file_name == None:
+        sentences = []
+        external_run = save_file_name != None
+        if not external_run:
             session = tf.get_default_session()
         else:
             session = tf.Session()
             self.saver.restore(session, save_file_name)
-            
+        #external_run = False
         go_vec = self.Embedding.word2vec("('<go>', 'Token')")
         eos_vec = self.Embedding.word2vec("('<eos>', 'Token')")
         initial_input = [ ( [go_vec] + [eos_vec]*max(1, self.timesteps-1) )[:self.timesteps] ] * self.batch_size
-        input_words = [ ["('<go>', 'Token')"] for x in range(self.batch_size) ]
-        initial_state = [ tf.random_normal([self.batch_size, h_size], stddev=0.01).eval() for h_size in self.hidden_size ]
+        initial_state = [ tf.random_normal([self.batch_size, h_size], stddev=0.001).eval(session=session) for h_size in self.hidden_size ]
         
-        if not self.use_vector:
-            probs, state = session.run([self.probs, self.state], feed_dict={self.input_vectors : initial_input, self.input_length : [1] * self.batch_size, self.initial_state : initial_state})
-        else:
-            prediction, state = session.run([self.prediction, self.state], feed_dict={self.input_vectors : initial_input, self.input_length : [1] * self.batch_size, self.initial_state : initial_state})
-        prev_input = initial_input
-        
-        print("Highest probs of 1st sentence", end=" ")
-        for i in range(self.timesteps):
+        for k in range((size-1) // self.batch_size + 1):
+            batch_sized_sentences = [ [] for x in range(self.batch_size)]
+            input_words = [ ["('<go>', 'Token')"] for x in range(self.batch_size) ]
             if not self.use_vector:
-                #print("result=", probs)
-                new_word_prob = probs[:, 0, :]
-                #print(sum([(1, -1)[i%2] * new_word_prob[:, i] for i in range(len(new_word_prob[0, :]))]))
-                #print(new_word_prob[0, 0])
-                print(max(new_word_prob[0, :]), end=" ")
-            words = []
-            for j in range(self.batch_size):
-                if not self.use_vector:
-                    #Only if UNK token is dominant, use UNK.
-                    if(new_word_prob[j, 0] > 0.99):
-                        words.append(self.Embedding.code2word(0))
-                        sentences[j].append(self.Embedding.code2word(0))
-                        continue
-                        
-                    randfloat = np.random.random()
-                    word_cumul_prob = 0
-                    prob_sum = sum(new_word_prob[j, 1:])
-                    prob_sum -= new_word_prob[j, self.Embedding.word2code("('<go>', 'Token')")]
-                    #print(randfloat * prob_sum)
-                    for k in range(1, len(new_word_prob[j, 1:])+1):
-                        if k == self.Embedding.word2code("('<go>', 'Token')"):
-                            continue
-                        word_cumul_prob += new_word_prob[j, k]
-                        if randfloat * prob_sum < word_cumul_prob: break
-                
-                    words.append(self.Embedding.code2word(k))
-                    sentences[j].append(self.Embedding.code2word(k))
-                else:
-                    close_words = self.Embedding.closest_word([prediction[j, 0, :]], 5)
-                    if j == 0: print(close_words[0][0], end=" ")
-                    chosen_word = np.random.choice(close_words[0])
-                    words.append(chosen_word)
-                    sentences[j].append(chosen_word)
-            
-            if i == self.timesteps: break
-            
-            #print(len(sentences[0]))
-            input = [ ( [self.Embedding.word2vec(words[j])] + [eos_vec]*max(1, self.timesteps-1) )[:self.timesteps] for j in range(self.batch_size) ]
-            for j in range(self.batch_size): input_words[j].append(words[j])
-            #for input_ in input:
-            #    print(input_)
-            if not self.use_vector:
-                probs, state = session.run([self.probs, self.state], feed_dict={self.input_vectors : input, self.input_length : [1] * self.batch_size, self.initial_state : state})
+                probs, state = session.run([self.probs, self.state], feed_dict={self.input_vectors : initial_input, self.input_length : [1] * self.batch_size, self.initial_state : initial_state})
             else:
-                prediction, state = session.run([self.prediction, self.state], feed_dict={self.input_vectors : input, self.input_length : [1] * self.batch_size, self.initial_state : state})
+                prediction, state = session.run([self.prediction, self.state], feed_dict={self.input_vectors : initial_input, self.input_length : [1] * self.batch_size, self.initial_state : initial_state})
+            prev_input = initial_input
             
-            
-            # prediction = tf.expand_dims(tf.concat([prev_input[0, :i, :], tf.expand_dims(prediction[i-1, :], 0)], axis=0), 0)
-            # prediction = tf.concat([prediction, tf.zeros([1, self.timesteps-i-1, self.embedding_size], dtype=tf.float32)], axis=1)
-            # prediction = session.run(prediction)
-            # print("input =", prediction[0, :, 0])
-            # prev_input = prediction
-            # prediction, _ = session.run([self.prediction, self.state], feed_dict={self.input_tensor : prediction, self.seq_length : [i+1]})
-            # wordvecs.append(prediction[i, :])
-            #print([session.run(tf.reshape(y, [-1])) for y in wordvecs])
-            # sentence = [session.run(tf.reshape(y[0], [-1])) for y in wordvecs]
-        print()
-        #print(input_words)
+            if not external_run: print("Highest probs of 1st sentence", end=" ")
+            for i in range(self.timesteps):
+                if not self.use_vector:
+                    #print("result=", probs)
+                    new_word_prob = probs[:, 0, :]
+                    #print(sum([(1, -1)[i%2] * new_word_prob[:, i] for i in range(len(new_word_prob[0, :]))]))
+                    #print(new_word_prob[0, 0])
+                    if not external_run: print("{0:.1f}%".format(max(new_word_prob[0, :]) * 100), end=" ")
+                words = []
+                for j in range(self.batch_size):
+                    if not self.use_vector:
+                        #Only if UNK token is dominant, use UNK.
+                        if(new_word_prob[j, 0] > 0.99):
+                            words.append(self.Embedding.code2word(0))
+                            batch_sized_sentences[j].append(self.Embedding.code2word(0))
+                            continue
+                            
+                        randfloat = np.random.random()
+                        word_cumul_prob = 0
+                        #Give probability weight
+                        weighted_prob = np.power(new_word_prob[j, :], 1.2)
+                        weighted_prob[self.Embedding.word2code("('<eos>', 'Token')")] /= 8.0
+                        prob_sum = sum(weighted_prob[1:])
+                        #print(randfloat * prob_sum)
+                        for k in range(1, len(weighted_prob[1:])+1):
+                            word_cumul_prob += weighted_prob[k]
+                            if randfloat * prob_sum < word_cumul_prob: break
+                    
+                        words.append(self.Embedding.code2word(k))
+                        batch_sized_sentences[j].append(self.Embedding.code2word(k))
+                    else:
+                        close_words = self.Embedding.closest_word([prediction[j, 0, :]], 5)
+                        if j == 0 and not external_run: print(close_words[0][0], end=" ")
+                        chosen_word = np.random.choice(close_words[0])
+                        words.append(chosen_word)
+                        batch_sized_sentences[j].append(chosen_word)
+                
+                if i == self.timesteps: break
+                
+                #print(len(batch_sized_sentences[0]))
+                input = [ ( [self.Embedding.word2vec(words[j])] + [eos_vec]*max(1, self.timesteps-1) )[:self.timesteps] for j in range(self.batch_size) ]
+                for j in range(self.batch_size): input_words[j].append(words[j])
+                #for input_ in input:
+                #    print(input_)
+                if not self.use_vector:
+                    probs, state = session.run([self.probs, self.state], feed_dict={self.input_vectors : input, self.input_length : [1] * self.batch_size, self.initial_state : state})
+                else:
+                    prediction, state = session.run([self.prediction, self.state], feed_dict={self.input_vectors : input, self.input_length : [1] * self.batch_size, self.initial_state : state})
+                
+                
+                # prediction = tf.expand_dims(tf.concat([prev_input[0, :i, :], tf.expand_dims(prediction[i-1, :], 0)], axis=0), 0)
+                # prediction = tf.concat([prediction, tf.zeros([1, self.timesteps-i-1, self.embedding_size], dtype=tf.float32)], axis=1)
+                # prediction = session.run(prediction)
+                # print("input =", prediction[0, :, 0])
+                # prev_input = prediction
+                # prediction, _ = session.run([self.prediction, self.state], feed_dict={self.input_tensor : prediction, self.seq_length : [i+1]})
+                # wordvecs.append(prediction[i, :])
+                #print([session.run(tf.reshape(y, [-1])) for y in wordvecs])
+                # sentence = [session.run(tf.reshape(y[0], [-1])) for y in wordvecs]
+            if not external_run: print()
+            sentences += batch_sized_sentences
+            #print(input_words)
         return sentences[:size]
