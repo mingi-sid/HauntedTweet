@@ -117,6 +117,7 @@ class Word2Vec():
         
         self.window_size = 5
         self.learning_rate = 0.002
+        self.learning_momentum = 0.9
 
         self._train_inputs = tf.placeholder(tf.int32, shape=[batch_size])
         self._train_labels = tf.placeholder(tf.int32, shape=[batch_size, 1])
@@ -137,7 +138,7 @@ class Word2Vec():
                     num_classes=self._vocabulary_size)
         self._loss = tf.reduce_mean(nce_loss)
 
-        self._optimizer = tf.train.MomentumOptimizer(self.learning_rate, 0.9).minimize(self._loss)
+        self._optimizer = tf.train.MomentumOptimizer(self.learning_rate, self.learning_momentum).minimize(self._loss)
 
         norm = tf.sqrt(tf.reduce_sum(tf.square(embeddings), 1, keepdims=True))
         self._normalized_embeddings = embeddings / norm

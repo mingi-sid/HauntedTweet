@@ -4,6 +4,7 @@ from data.preparser import Preparser
 from data.parser import Parser
 from data.word2vec import Word2Vec
 from generator.generator import Generator
+from generator.unparser import Unparser
 import gc
 
 def join_filenames(*names):
@@ -15,7 +16,8 @@ help_message = '''-h : Prints this message
 -W [filename] : Load and save Word2Vec data from [filename]
 -g N : Run Generator NN learning N steps
 -G [filename] : Load and save Generator data from [filename]
--V : Run Generator word2vec mode. Otherwise one-hot-vector mode is used.'''
+-s N : Save ~=N sentences made by Generator.
+-S [filename] : Save sentences at [filename]'''
 
 def main():
     argdict = dict(zip(sys.argv, sys.argv[1:] + ['']))
@@ -29,8 +31,8 @@ def main():
     
     embedding_size = 64
     word2vec_batch_size = 640
-    gen_batch_size = 48
-    gen_seq_length = 16
+    gen_batch_size = 128
+    gen_seq_length = 32
     gen_hidden_size = [64, 128]
     
     if "-i" in argdict:
@@ -75,7 +77,14 @@ def main():
                 generator = Generator(embeddings)
                 generator.nn_init(gen_batch_size, gen_seq_length, gen_hidden_size, learning_rate = 1E-05, seed=None, use_vector=("-V" in argdict))
                 generator.train_real_data(int(argdict["-g"]), tokenized_file_r, gen_save_filename, restore=gen_restore)
-                print(generator.generate(gen_save_filename, 2))
+                
+                if "-s" in argdict and int(argdict["-s"]) >= 0:
+                    result_filename = join_filenames(argdict["-S"])
+                    unparser = Unparser(result_filename)
+                    sentences = generator.generate(gen_save_filename, int(argdict["-s"]))
+                    unparser.save(sentences)
+                
+                
     
     
     

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import os.path
-
+import sys
 class Unparser():
     def __init__(self, filename):
         self.filename = filename
@@ -31,11 +31,19 @@ class Unparser():
             
             #Make into string
             string = ""
+            maximum_sentence_count = 3
+            sentence_count = maximum_sentence_count
             for token in sentence_compressed:
                 #print(token)
                 tagged_word, count = token
-                _, word, __, tag, ___= tuple(tagged_word.split("'"))
+                word, tag = eval(tagged_word)
                 replaced_word = replace_dict[word] if (word in replace_dict) else word
+                
+                if word == '<eos>':
+                    sentence_count -= 1
+                if sentence_count <= 0:
+                    break
+                    
                 
                 if tag in tags_to_glue:
                     string += replaced_word
@@ -45,13 +53,13 @@ class Unparser():
                 if count > 1:
                     string += "*" + str(count)
                     
-            string = '\n'.join([x.strip() for x in string.split('\n')]).strip()
+            string = '\n'.join([x.strip() for x in string.split('\n') if x != '']).strip()
             result.append(string)
         return result
                 
     def save(self, sentences):
-        with open(os.path.join(os.path.dirname(sys.argv[0]), "generator", filename), "a", encoding='utf8') as f:
+        with open(os.path.join(os.path.dirname(sys.argv[0]), self.filename), 'a', encoding='utf8') as f:
             result = self.unparse(sentences)
             for string in result:
                 f.write(string)
-                f.write(self.delimiter)
+                f.write('\n' + self.delimiter + '\n')
