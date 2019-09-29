@@ -117,3 +117,4 @@ checkpoint.tmp*
 *.index
 *.meta
 *.meta.tmp*
+*.zip

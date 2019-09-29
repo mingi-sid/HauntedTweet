@@ -14,6 +14,7 @@ class Preparser:
 
     def extract(self, filter=False):
         "Actually parse the contents. Exclude retweets, replies and links when filter is on."
+        ai_tweet = "#_트위터망령"
         pattern = """(?:".*?",){3}"(.*?)",".*?","((?:.|\n|\r)*?)",(?:".*?",){3}".*?"""
         regex_tweet = re.compile(pattern)
         prevtext = ""
@@ -33,8 +34,8 @@ class Preparser:
                 elif filter == False:
                     self._result.append((timestamp, text))
                 else:
-                    if "@" not in text:
-                        self._result.append((timestamp, re.sub("https?:\/\/t\.co\/\w+|#[\S]+", "", text)))
+                    if "@" not in text and ai_tweet not in text:
+                        self._result.append((timestamp, re.sub(r"https?:\/\/t\.co\/\w+|#[\S]+|[\U00010000-\U0010ffff]", "", text)))
                 prevtext = ""
         return self._result
 

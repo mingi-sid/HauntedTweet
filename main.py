@@ -29,11 +29,12 @@ def main():
     stat_filename = join_filenames("data", "tweets_stat.txt")
     tokenized_filename = join_filenames("data", "tweets_tokenized.txt")
     
-    embedding_size = 64
+    embedding_size = 128
     word2vec_batch_size = 640
     gen_batch_size = 128
     gen_seq_length = 32
-    gen_hidden_size = [64, 128]
+    gen_hidden_size = [128, 256]
+    learning_rate = 3E-02
     
     if "-i" in argdict:
         proceed = True
@@ -75,7 +76,7 @@ def main():
                 gen_save_filename = join_filenames("saves", argdict["-G"])
                 gen_restore = os.path.isfile(gen_save_filename+".meta")
                 generator = Generator(embeddings)
-                generator.nn_init(gen_batch_size, gen_seq_length, gen_hidden_size, learning_rate = 1E-05, seed=None, use_vector=("-V" in argdict))
+                generator.nn_init(gen_batch_size, gen_seq_length, gen_hidden_size, learning_rate = learning_rate, seed=None, use_vector=("-V" in argdict))
                 generator.train_real_data(int(argdict["-g"]), tokenized_file_r, gen_save_filename, restore=gen_restore)
                 
                 if "-s" in argdict and int(argdict["-s"]) >= 0:

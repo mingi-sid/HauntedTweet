@@ -116,7 +116,7 @@ class Word2Vec():
         num_sampled = 64
         
         self.window_size = 5
-        self.learning_rate = 0.002
+        self.learning_rate = 0.05
         self.learning_momentum = 0.9
 
         self._train_inputs = tf.placeholder(tf.int32, shape=[batch_size])

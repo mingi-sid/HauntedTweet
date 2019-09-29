@@ -45,5 +45,6 @@ class Parser():
                 tokens = tagger.pos(text, norm=True)
                 tokens = [('<go>', 'Token')] + tokens + [('<eos>', 'Token')]
                 self._tokens.append( [str(token) for token in tokens] )
-        for line in random.shuffle(self._tokens):
+        #random.shuffle(self._tokens)
+        for line in self._tokens:
             targetfile.write("\t".join(line) + "\n")
