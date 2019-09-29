@@ -35,7 +35,7 @@ class Preparser:
                     self._result.append((timestamp, text))
                 else:
                     if "@" not in text and ai_tweet not in text:
-                        self._result.append((timestamp, re.sub("https?:\/\/t\.co\/\w+|#[\S]+|[\U00010000-\U0010ffff]", "", text)))
+                        self._result.append((timestamp, re.sub(r"https?:\/\/t\.co\/\w+|#[\S]+|[\U00010000-\U0010ffff]", "", text)))
                 prevtext = ""
         return self._result
 
