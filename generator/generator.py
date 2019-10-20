@@ -10,7 +10,8 @@ class Generator():
         self.embedding_size = Embedding.embedding_size()
         self.word_size = Embedding.word_size()
         
-    def nn_init(self, batch_size, timesteps, hidden_size, learning_rate = 1E-05, seed=1, use_vector=False):
+    def nn_init(self, batch_size, timesteps, hidden_size, learning_rate=1E-05, seed=1, use_vector=False):
+        #Initialize generator neural network
         if seed != None:
             np.random.seed(seed)
             tf.set_random_seed(seed)
@@ -40,29 +41,29 @@ class Generator():
         
         
         #models
-        
+        #Dropout probabilities
         self.keep_input = tf.placeholder_with_default(1.0, shape=())
         self.keep_output = tf.placeholder_with_default(1.0, shape=())
         self.keep_state = tf.placeholder_with_default(1.0, shape=())
+
+        #RNN cells
         self.cells = [ tf.nn.rnn_cell.DropoutWrapper(tf.nn.rnn_cell.GRUCell(num_units=h_size), \
                     input_keep_prob=self.keep_input, output_keep_prob=self.keep_output, state_keep_prob=self.keep_state) for h_size in hidden_size]
-        
         self.cell = tf.nn.rnn_cell.MultiRNNCell(self.cells)
+
+        #RNN model
         self.initial_state = tuple([ tf.placeholder_with_default(self.cells[i].zero_state(batch_size, dtype=tf.float32), shape=(batch_size, hidden_size[i])) for i in range(len(self.cells)) ])
-        
         self.output, self.state = tf.nn.dynamic_rnn(self.cell, self.input_vectors, self.input_length, initial_state=self.initial_state, dtype=tf.float32)
-        
         self.output_tensor = self.output
         
+        #Prediction and loss
         if not self.use_vector:
             self.prediction = tf.reshape(tf.matmul(tf.reshape(self.output_tensor, [-1, hidden_size[-1]]), W) + b, [-1, timesteps, self.output_size])
             self.probs = tf.nn.softmax(self.prediction)
             
             zipf_inv_list = [ np.power(float(x) * np.log(self.word_size), 0.7) for x in range(1, self.word_size+1) ]
             self.zipf_inv = tf.constant(zipf_inv_list, dtype=tf.float32)
-            
             self.exag_probs = tf.multiply(self.probs, self.zipf_inv)
-        
             self.weights = tf.constant([ [np.power(1/float(j), 0.5) for j in range(1, timesteps+1)] for i in range(batch_size)])
             
             cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.prediction, labels=self.input_targets)
@@ -72,39 +73,44 @@ class Generator():
         else:
             self.prediction = tf.reshape(tf.matmul(tf.reshape(self.output_tensor, [-1, hidden_size[-1]]), W) + b, [-1, timesteps, self.output_size])
             self.loss = tf.losses.cosine_distance(labels=self.input_targets, predictions=self.prediction, axis=2)
+        #Optimizer
         self.optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self.loss)
-        
+        #Initializer and saver
         self.tf_init = tf.global_variables_initializer()
         self.saver = tf.train.Saver()
     
     def batch_real_data(self, datafile):
+    #Create batch from real tweets
         input_vectors_l = []
         input_length_l = []
         input_targets_l = []
         
         datafile.seek(self.filepos.eval())
         count = 0
+        EOS_VEC = self.Embedding.word2vec("('<eos>', 'Token')")
+        GO_VEC = self.Embedding.word2vec("('<go>', 'Token')")
         while count < self.batch_size:
+            #Repeat until batch is full
             try:
                 line = datafile.readline()
             except UnicodeDecodeError:
-                datafile.seek(0, 0)
-                line = datafile.readline()
+                pass
             if line == "":
                 print("One epoch ended.")
                 datafile.seek(0, 0)
                 line = datafile.readline()
             input_tokens = line.strip().split('\t')
             
-            input_length = len(input_tokens) - 1
-            eos_vec = self.Embedding.word2vec("('<eos>', 'Token')")
-            go_vec = self.Embedding.word2vec("('<go>', 'Token')")
+            DATA_CONTINUE, DATA_END, DATA_RESTART = 2, 1, 0
+            input_length = len(input_tokens) - DATA_RESTART
             shifted_tokens = ( input_tokens[1:] + ["('<go>', 'Token')"]*max(1, self.timesteps-input_length+1) )[:self.timesteps]
             input_labels = [self.Embedding.word2code(token) for token in shifted_tokens]
-            input_targets = [ [1 if i==code else 0 for i in range(self.word_size)] for code in input_labels ]
+            input_targets = [ [1.0 if i==code else 0.0 for i in range(self.word_size)] for code in input_labels ]
+
             #Randomly ignore sentence with UNK
+            CHANCE_TO_IGNORE_SENTENCE_WITH_UNK = 0.0
             if 0 in input_targets:
-                if np.random.random() < 0.0:
+                if np.random.random() < CHANCE_TO_IGNORE_SENTENCE_WITH_UNK:
                     continue
             
             #Subsampling
@@ -114,8 +120,8 @@ class Generator():
             if np.random.random() < np.power(appear_prob, 1/float(self.timesteps)) / 7E-4 - 1:
                 pass#continue
                 
-            input_vectors = ( [self.Embedding.word2vec(token) for token in input_tokens] + [go_vec]*max(1, self.timesteps-input_length) )[:self.timesteps]
-            input_targets_vectors = input_vectors[1:] + [go_vec]
+            input_vectors = ( [self.Embedding.word2vec(token) for token in input_tokens] + [GO_VEC]*max(1, self.timesteps-input_length) )[:self.timesteps]
+            input_targets_vectors = input_vectors[1:] + [GO_VEC]
             
             input_length_l.append(input_length)
             input_vectors_l.append(input_vectors)
@@ -124,6 +130,7 @@ class Generator():
             else:
                 input_targets_l.append(input_targets_vectors)
             count += 1
+        #End of while
         self.filepos.load(datafile.tell())
             
         return input_vectors_l, input_length_l, input_targets_l
@@ -147,14 +154,17 @@ class Generator():
                 total_loss += loss
                 loss_count += 1
                 if step % 20 == 0 or step == num_steps-1:
+                    #Print average loss
                     print("average loss at {} = {}".format(step, total_loss / loss_count))
                     total_loss = 0.0
                     loss_count = 0
                 if step % 200 == 0:
+                    #Print generated sentences
                     sentences = self.generate(None, 10)
                     for sentence in sentences:
                         print( ' '.join([token.split("'")[1] for token in sentence]) )
                 if step % 10 == 0:
+                    #Save current state
                     self.saver.save(session, save_file_name)
             
     def train_against(self):
@@ -162,27 +172,31 @@ class Generator():
         
     def generate(self, save_file_name, size = 1):
         sentences = []
-        external_run = save_file_name != None
+        external_run = (save_file_name != None)
         if not external_run:
             session = tf.get_default_session()
         else:
             session = tf.Session()
             self.saver.restore(session, save_file_name)
-        go_vec = self.Embedding.word2vec("('<go>', 'Token')")
-        eos_vec = self.Embedding.word2vec("('<eos>', 'Token')")
-        initial_input = [ ( [go_vec] + [eos_vec]*max(1, self.timesteps-1) )[:self.timesteps] ] * self.batch_size
-        initial_state = [ tf.random_normal([self.batch_size, h_size], stddev=0.001).eval(session=session) for h_size in self.hidden_size ]
+
+        GO_VEC = self.Embedding.word2vec("('<go>', 'Token')")
+        EOS_VEC = self.Embedding.word2vec("('<eos>', 'Token')")
+        initial_input = [ ( [GO_VEC] + [EOS_VEC]*max(1, self.timesteps-1) )[:self.timesteps] ] * self.batch_size
+        initial_state_random = [ tf.random_normal([self.batch_size, h_size], stddev=0.001).eval(session=session) for h_size in self.hidden_size ]
+        initial_state_zero = [ tf.zeros([self.batch_size, h_size]).eval(session=session) for h_size in self.hidden_size ]
         
         for k in range((size-1) // self.batch_size + 1):
             batch_sized_sentences = [ [] for x in range(self.batch_size)]
             input_words = [ ["('<go>', 'Token')"] for x in range(self.batch_size) ]
             if not self.use_vector:
-                probs, state = session.run([self.probs, self.state], feed_dict={self.input_vectors : initial_input, self.input_length : [1] * self.batch_size, self.initial_state : initial_state})
+                probs, state = session.run([self.probs, self.state],
+                                feed_dict={self.input_vectors : initial_input, self.input_length : [1] * self.batch_size, self.initial_state : initial_state_random})
             else:
-                prediction, state = session.run([self.prediction, self.state], feed_dict={self.input_vectors : initial_input, self.input_length : [1] * self.batch_size, self.initial_state : initial_state})
+                prediction, state = session.run([self.prediction, self.state],
+                                feed_dict={self.input_vectors : initial_input, self.input_length : [1] * self.batch_size, self.initial_state : initial_state_random})
             prev_input = initial_input
             
-            if not external_run: print("Highest probs of 1st sentence", end=" ")
+            if not external_run: print("Highest probs of words in 1st sentence", end=" ")
             for i in range(self.timesteps):
                 if not self.use_vector:
                     new_word_prob = probs[:, 0, :]
@@ -197,10 +211,12 @@ class Generator():
                             continue
                             
                         randfloat = np.random.random()
-                        word_cumul_prob = 0
+                        word_cumul_prob = 0.0
                         #Give probability weight
-                        weighted_prob = np.power(new_word_prob[j, :], 2.0)
-                        weighted_prob[self.Embedding.word2code("('<eos>', 'Token')")] /= 16.0
+                        PROBABILITY_EXAGGERATION = 2.0
+                        weighted_prob = np.power(new_word_prob[j, :], PROBABILITY_EXAGGERATION)
+                        AVOID_EOS = 16.0
+                        weighted_prob[self.Embedding.word2code("('<eos>', 'Token')")] /= AVOID_EOS
                         prob_sum = sum(weighted_prob[1:])
                         for k in range(1, len(weighted_prob[1:])+1):
                             word_cumul_prob += weighted_prob[k]
@@ -217,7 +233,7 @@ class Generator():
                 
                 if i == self.timesteps: break
                 
-                input = [ ( [self.Embedding.word2vec(words[j])] + [eos_vec]*max(1, self.timesteps-1) )[:self.timesteps] for j in range(self.batch_size) ]
+                input = [ ( [self.Embedding.word2vec(words[j])] + [EOS_VEC]*max(1, self.timesteps-1) )[:self.timesteps] for j in range(self.batch_size) ]
                 for j in range(self.batch_size): input_words[j].append(words[j])
                 if not self.use_vector:
                     probs, state = session.run([self.probs, self.state], feed_dict={self.input_vectors : input, self.input_length : [1] * self.batch_size, self.initial_state : state})
@@ -226,4 +242,5 @@ class Generator():
                 
             if not external_run: print()
             sentences += batch_sized_sentences
+        #End of for loop
         return sentences[:size]

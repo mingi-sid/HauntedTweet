@@ -12,6 +12,7 @@ class Parser():
             self.file = openfile
 
     def get_stats(self, targetfile):
+        "Save frequencies of tokens as a file"
         tagger = Twitter()
         for line in self.file:
             if line == "timestamp\ttext":
@@ -20,6 +21,7 @@ class Parser():
             text = text.replace("\\n", "\n").strip()
             if text == "":
                 continue
+            
             tokens = tagger.pos(text, norm=True)
             tokens = [('<go>', 'Token')] + tokens + [('<eos>', 'Token')]
             self._tokens.append( [str(token) for token in tokens] )
@@ -34,6 +36,7 @@ class Parser():
             targetfile.write(str(key) + "\t" + str(self._freq[key]) + "\n")
 
     def get_data(self, targetfile):
+        "Save tokenized sentences as a file"
         if self._tokens == []:
             tagger = Twitter()
             self.file.seek(0)

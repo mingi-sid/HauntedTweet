@@ -21,13 +21,15 @@ class Word2Vec():
         self._file = None
 
     def give_code(self):
-    #give each word a number, from 1 to 10000 and save mapping at dictionary
+    #give each word a code number, from 1 to [max_word_count] and save mapping at dictionary
         with open(self._freqfilename, "r", encoding='utf8') as self._freqfile:
             count = 1
-            #If there are more than 50000 words, replace rare words into UNK token
+            #If there are more than [max_word_count] words, replace rare words into UNK token
             max_word_count = 10000
-            self._code2word[0] = "('UNK', 'UNK')"
-            self._codefreq[0] = 0.0
+            UNK_CODE = 0
+            self._code2word[UNK_CODE] = "('UNK', 'UNK')"
+            self._codefreq[UNK_CODE] = 0.0
+            #Make word <-> code mapping and code_to_frequency dictionary
             for line in self._freqfile:
                 word, freq = tuple(line.split('\t'))
                 freq = float(freq)
@@ -36,13 +38,10 @@ class Word2Vec():
                     self._code2word[count] = word
                     self._codefreq[count] = freq
                 else:
-                    self._word2code[word] = 0
-                    self._codefreq[0] += freq
+                    self._word2code[word] = UNK_CODE
+                    self._codefreq[UNK_CODE] += freq
                 count += 1
             self._vocabulary_size = min(max_word_count + 1, count)
-            #print(self._vocabulary_size)
-            #print(min(list(self._word2code.values())), max(list(self._word2code.values())), len(list(self._word2code.values())))
-            #print(list(self._code2word.items())[0:10])
     
     def generate_batch(self, batch_size, filepos, window_size = 3):
     #From "token\ttoken" format file, create batch and labels array
@@ -50,9 +49,11 @@ class Word2Vec():
         self._file.seek(filepos)
         batch_ = []
         labels_ = []
-        T = 0.001
+        T = 0.001   #subsampling target frequency
         while index < batch_size:
+            #Repeat until batch is full
             if self._dataindex == -1 or self._dataindex >= len(self._dataline):
+                #If index goes out-range, read next valid line and continue
                 self._dataline = self._file.readline()
                 if self._dataline == "":
                     print("One epoch ended.")
@@ -63,6 +64,7 @@ class Word2Vec():
                         self._dataline = self._file.readline()
                 self._dataline = self._dataline.strip().split('\t')
                 self._dataindex = 0
+
             subsampled = 0
             for j in range(window_size):
                 neighbor_index = self._dataindex - subsampled - j - 1
@@ -76,7 +78,6 @@ class Word2Vec():
                     continue
                 labels_.append(self._word2code[ self._dataline[neighbor_index] ])
                 batch_.append(self._word2code[ self._dataline[self._dataindex] ])
-                #print(self._word2code[ self._dataline[self._dataindex - j - 1] ], self._word2code[ self._dataline[self._dataindex] ], index)
                 index += 1
             subsampled = 0
             for j in range(window_size):
@@ -91,18 +92,15 @@ class Word2Vec():
                     continue
                 labels_.append(self._word2code[ self._dataline[neighbor_index] ])
                 batch_.append(self._word2code[ self._dataline[self._dataindex] ])
-                #print(self._word2code[ self._dataline[self._dataindex + j + 1] ], self._word2code[ self._dataline[self._dataindex] ], index)
                 index += 1
             self._dataindex += 1
-        #print(batch)
-        #print(labels)
+        #End of while
         batch = batch_
         labels = [ [x] for x in labels_ ]
-        #print(self._file.tell(), self._filepos)
         return batch, labels, self._file.tell()
 
     def tf_init(self, embedding_size, batch_size, seed=1):
-    #Initialize tensorflow variables.
+    #Initialize tensorflow variables and models
         if seed != None:
             np.random.seed(seed)
             tf.set_random_seed(seed)
@@ -171,12 +169,14 @@ class Word2Vec():
                     average_loss += loss_val
 
                     if step % 1000 == 0:
+                        #Print average loss
                         if step > 0:
                             average_loss /= 1000
                         print('Average loss at step {} : {}'.format(step, average_loss))
                         average_loss = 0
 
                     if step % 10000 == 0:
+                        #Print nearest word of 8 frequent words
                         sim = self._similarity.eval()
                         for i in xrange(self._valid_size):
                             valid_word = self._code2word[self._valid_examples[i]]
@@ -189,10 +189,11 @@ class Word2Vec():
                             print(log_str)
 
                     if step % 50 == 0 or step == num_steps-1:
+                        #Save current state
                         self._saver.save(session, save_file_name)
-            print("Learning ended")
+                print("Learning ended")
             self._final_embeddings = self._normalized_embeddings.eval()
-            print("Closing session")
+        print("Closing session")
 
     def Embeddings(self):
         return Embeddings(self._session, self._embedding_size, self._word2code, self._code2word, self._codefreq, self._final_embeddings)

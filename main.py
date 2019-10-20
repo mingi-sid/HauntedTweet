@@ -24,22 +24,29 @@ def main():
     if "-h" in argdict:
         print(help_message)
         return
+    
+    #Set of filenames to data files.
     raw_filename = join_filenames("data", "tweets.csv")
     filtered_filename = join_filenames("data", "_tweets_filtered.txt")
     stat_filename = join_filenames("data", "tweets_stat.txt")
     tokenized_filename = join_filenames("data", "tweets_tokenized.txt")
     
+    #Dimension of the model
     embedding_size = 128
     word2vec_batch_size = 640
     gen_batch_size = 128
     gen_seq_length = 32
     gen_hidden_size = [128, 256]
+
+    #Hyper-parameter of the model
     learning_rate = 3E-02
     
     if "-i" in argdict:
-        proceed = True
+        #Filter valid tweets from data file, and use nlp parser to tokenize tweets
         if os.path.isfile(tokenized_filename):
             proceed = (input("Erasing old data. OK to proceed? (Y/N)") == "Y")
+        else:
+            proceed = True
         if proceed:
             with open(raw_filename, "r", encoding='utf8') as raw_file_r:
                 #Filter actual tweets
@@ -55,9 +62,9 @@ def main():
                         parser.get_stats(stat_file_w)
                     with open(tokenized_filename, "w", encoding='utf8') as tokenized_file_w:
                         parser.get_data(tokenized_file_w)
-                del parser
                 
     if "-w" in argdict and int(argdict["-w"]) >= 0:
+        #Start or continue word2vec optimization
         word2vec_num_step = int(argdict["-w"])
         word2vec_save_filename = join_filenames("saves", argdict["-W"])
         word2vec_restore = os.path.isfile(word2vec_save_filename+".meta")
@@ -65,12 +72,10 @@ def main():
         word2vec = Word2Vec(tokenized_filename, stat_filename)
         word2vec.give_code()
         word2vec.tf_init(embedding_size=embedding_size, batch_size=word2vec_batch_size, seed=None)
-        '''
-        word2vec.tf_run(word2vec_num_step, word2vec_save_filename, restore=word2vec_restore)
-        '''
         word2vec.tf_run(word2vec_num_step, word2vec_save_filename, restore=word2vec_restore)
         
         if "-g" in argdict and int(argdict["-g"]) >= 0:
+        #Start or continue generator learning
             with open(stat_filename, "r", encoding='utf8') as stat_file_r, open(tokenized_filename, "r", encoding='utf8') as tokenized_file_r:
                 embeddings = word2vec.Embeddings()
                 gen_save_filename = join_filenames("saves", argdict["-G"])
