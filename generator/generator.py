@@ -72,6 +72,7 @@ class Generator():
         else:
             self.prediction = tf.reshape(tf.matmul(tf.reshape(self.output_tensor, [-1, hidden_size[-1]]), W) + b, [-1, timesteps, self.output_size])
             self.loss = tf.losses.cosine_distance(labels=self.input_targets, predictions=self.prediction, axis=2)
+            tf.scalar_summary('loss', self.loss)
         self.optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self.loss)
         
         self.tf_init = tf.global_variables_initializer()
@@ -156,6 +157,7 @@ class Generator():
                         print( ' '.join([token.split("'")[1] for token in sentence]) )
                 if step % 10 == 0:
                     self.saver.save(session, save_file_name)
+                train_writer = tf.summary.FileWriter('tmp/gen_log', session.graph)
             
     def train_against(self):
         pass
