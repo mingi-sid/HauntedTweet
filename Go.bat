@@ -1,3 +1,3 @@
 :main
-@start /wait python ./main.py -w 1000 -W word2vec_momentum.tfsav
+@start /wait python ./main.py -w 0 -g 10000
 goto :main
