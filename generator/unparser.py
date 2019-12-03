@@ -22,6 +22,8 @@ class Unparser():
                     string += replaced_word
                 else:
                     string += " " + replaced_word
+                if word == '<eos>':
+                    break
                     
             string = '\n'.join([x.strip() for x in string.split('\n') if x != '']).strip()
             result.append(string)
