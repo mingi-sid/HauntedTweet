@@ -29,26 +29,26 @@ class Generator():
         self.filepos = tf.get_variable("gen_filepos", initializer=tf.constant(0), dtype=tf.int32)
         
         #inputs and outputs
-        self.input_vectors = tf.placeholder(tf.float32, [None, timesteps, self.embedding_size])
-        self.input_length = tf.placeholder(tf.int32, [None])
-        self.input_targets = tf.placeholder(tf.int32, [None, timesteps, self.output_size])
+        self.input_vectors = tf.placeholder(tf.float32, [None, timesteps, self.embedding_size], 'input_vectors')
+        self.input_length = tf.placeholder(tf.int32, [None], 'input_length')
+        self.input_targets = tf.placeholder(tf.int32, [None, timesteps, self.output_size], 'input_targets')
         
         
         #Weights and biases for output
-        W = tf.Variable(tf.random_normal([hidden_size[-1], self.output_size]))
-        b = tf.Variable(tf.random_normal([self.output_size]))
+        W = tf.Variable(tf.random_normal([hidden_size[-1], self.output_size]), name='output_weights')
+        b = tf.Variable(tf.random_normal([self.output_size]), name='output_biases')
         
         
         #models
         
-        self.keep_input = tf.placeholder_with_default(1.0, shape=())
-        self.keep_output = tf.placeholder_with_default(1.0, shape=())
-        self.keep_state = tf.placeholder_with_default(1.0, shape=())
+        self.keep_input = tf.placeholder_with_default(1.0, (), 'keep_input')
+        self.keep_output = tf.placeholder_with_default(1.0, (), 'keep_output')
+        self.keep_state = tf.placeholder_with_default(1.0, (), 'keep_state')
         self.cells = [ tf.nn.rnn_cell.DropoutWrapper(tf.nn.rnn_cell.GRUCell(num_units=h_size), \
                     input_keep_prob=self.keep_input, output_keep_prob=self.keep_output, state_keep_prob=self.keep_state) for h_size in hidden_size]
         
         self.cell = tf.nn.rnn_cell.MultiRNNCell(self.cells)
-        self.initial_state = tuple([ tf.placeholder_with_default(self.cells[i].zero_state(batch_size, dtype=tf.float32), shape=(batch_size, hidden_size[i])) for i in range(len(self.cells)) ])
+        self.initial_state = tuple([ tf.placeholder_with_default(self.cells[i].zero_state(batch_size, dtype=tf.float32), shape=(batch_size, hidden_size[i]), name='initial_state_'+str(i)) for i in range(len(self.cells)) ])
         
         self.output, self.state = tf.nn.dynamic_rnn(self.cell, self.input_vectors, self.input_length, initial_state=self.initial_state, dtype=tf.float32)
         
@@ -69,6 +69,7 @@ class Generator():
             mask = tf.sequence_mask(self.input_length, maxlen=timesteps, dtype=tf.float32)
             
             self.loss = tf.reduce_sum(mask*cross_entropy) / tf.reduce_sum(tf.cast(self.input_length, dtype=tf.float32))
+            tf.summary.scalar('loss', self.loss)
         else:
             self.prediction = tf.reshape(tf.matmul(tf.reshape(self.output_tensor, [-1, hidden_size[-1]]), W) + b, [-1, timesteps, self.output_size])
             self.loss = tf.losses.cosine_distance(labels=self.input_targets, predictions=self.prediction, axis=2)
@@ -77,6 +78,8 @@ class Generator():
         
         self.tf_init = tf.global_variables_initializer()
         self.saver = tf.train.Saver()
+
+        
     
     def batch_real_data(self, datafile):
         input_vectors_l = []
@@ -139,10 +142,11 @@ class Generator():
             
             total_loss = 0.0
             loss_count = 0
+            summaries = tf.summary.merge_all()
             for step in range(num_steps):
                 input_vectors_l, input_length_l, input_targets_l = self.batch_real_data(datafile)
                 
-                _, loss = session.run([self.optimizer, self.loss],\
+                _, loss, summary = session.run([self.optimizer, self.loss, summaries],\
                                     {self.input_vectors : input_vectors_l, self.input_length : input_length_l, self.input_targets : input_targets_l,\
                                     self.keep_input : 1.0, self.keep_output : 0.5, self.keep_state : 1.0})
                 total_loss += loss
@@ -157,8 +161,9 @@ class Generator():
                         print( ' '.join([token.split("'")[1] for token in sentence]) )
                 if step % 10 == 0:
                     self.saver.save(session, save_file_name)
-                train_writer = tf.summary.FileWriter('tmp/gen_log', session.graph)
-            
+                    train_writer = tf.summary.FileWriter('tmp/gen_log', session.graph)
+                    train_writer.add_summary(summary, step)
+
     def train_against(self):
         pass
         
@@ -173,7 +178,7 @@ class Generator():
         go_vec = self.Embedding.word2vec("('<go>', 'Token')")
         eos_vec = self.Embedding.word2vec("('<eos>', 'Token')")
         initial_input = [ ( [go_vec] + [eos_vec]*max(1, self.timesteps-1) )[:self.timesteps] ] * self.batch_size
-        initial_state = [ tf.random_normal([self.batch_size, h_size], stddev=0.001).eval(session=session) for h_size in self.hidden_size ]
+        initial_state = [ tf.random_normal([self.batch_size, h_size], stddev=0.001, name='initial_state_'+str(h_size)).eval(session=session) for h_size in self.hidden_size ]
         
         for k in range((size-1) // self.batch_size + 1):
             batch_sized_sentences = [ [] for x in range(self.batch_size)]
