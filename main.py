@@ -41,7 +41,7 @@ def main():
     gen_batch_size = 128
     gen_seq_length = int(session_config['dimension']['gen_seq_length'])
     gen_hidden_size = [int(x) for x in session_config['dimension']['gen_hidden_size'].split(',')]
-    learning_rate = 3E-02
+    learning_rate = 1E-03
     
 
     if "-i" in argdict:

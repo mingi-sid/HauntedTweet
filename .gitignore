@@ -118,3 +118,6 @@ checkpoint.tmp*
 *.meta
 *.meta.tmp*
 *.zip
+
+# Tensorflow summary data
+tmp/
