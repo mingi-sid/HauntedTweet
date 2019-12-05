@@ -199,7 +199,7 @@ class Generator():
         GO_VEC = self.Embedding.word2vec("('<go>', 'Token')")
         EOS_VEC = self.Embedding.word2vec("('<eos>', 'Token')")
         initial_input = [ ( [GO_VEC] + [EOS_VEC]*max(1, self.timesteps-1) )[:self.timesteps] ] * self.batch_size
-        initial_state = [ tf.random_normal([self.batch_size, h_size], stddev=0.001, name='initial_state_'+str(h_size)).eval(session=session) for h_size in self.hidden_size ]
+        initial_state_random = [ tf.random_normal([self.batch_size, h_size], stddev=0.001, name='initial_state_'+str(h_size)).eval(session=session) for h_size in self.hidden_size ]
         initial_state_zero = [ tf.zeros([self.batch_size, h_size]).eval(session=session) for h_size in self.hidden_size ]
         
         for k in range((size-1) // self.batch_size + 1):
