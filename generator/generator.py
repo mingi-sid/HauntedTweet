@@ -33,6 +33,13 @@ class Generator():
         self.input_length = tf.placeholder(tf.int32, [None])
         self.input_targets = tf.placeholder(tf.int32, [None, timesteps, self.output_size])
         
+        self.input_vectors_data = tf.data.Dataset.from_tensor_slices(self.input_vectors)
+        self.input_length_data = tf.data.Dataset.from_tensor_slices(self.input_length)
+        self.input_targets_data = tf.data.Dataset.from_tensor_slices(self.input_targets)
+        
+        self.input_vectors_iter = self.input_vectors_data.make_initializable_iterator()
+        self.input_length_iter = self.input_length_data.make_initializable_iterator()
+        self.input_targets_iter = self.input_targets_data.make_initializable_iterator()
         
         #Weights and biases for output
         W = tf.Variable(tf.random_normal([hidden_size[-1], self.output_size]))
@@ -99,11 +106,11 @@ class Generator():
             input_length = len(input_tokens) - 1
             eos_vec = self.Embedding.word2vec("('<eos>', 'Token')")
             go_vec = self.Embedding.word2vec("('<go>', 'Token')")
-            shifted_tokens = ( input_tokens[1:] + ["('<go>', 'Token')"]*max(1, self.timesteps-input_length+1) )[:self.timesteps]
+            shifted_tokens = ( input_tokens[1:] + ["('<go>', 'Token')"]*max(1, self.timesteps-len(input_tokens)+1) )[:self.timesteps]
             input_labels = [self.Embedding.word2code(token) for token in shifted_tokens]
             input_targets = [ [1 if i==code else 0 for i in range(self.word_size)] for code in input_labels ]
             #Randomly ignore sentence with UNK
-            if 0 in input_targets:
+            if 0 in input_labels:
                 if np.random.random() < 0.0:
                     continue
             
@@ -119,13 +126,14 @@ class Generator():
             
             input_length_l.append(input_length)
             input_vectors_l.append(input_vectors)
+            
             if not self.use_vector:
                 input_targets_l.append(input_targets)
             else:
                 input_targets_l.append(input_targets_vectors)
             count += 1
         self.filepos.load(datafile.tell())
-            
+
         return input_vectors_l, input_length_l, input_targets_l
             
     def train_real_data(self, num_steps, datafile, save_file_name, restore=True):
@@ -141,7 +149,7 @@ class Generator():
             for step in range(num_steps):
                 input_vectors_l, input_length_l, input_targets_l = self.batch_real_data(datafile)
                 
-                _, loss = session.run([self.optimizer, self.loss],\
+                _, loss, __, ___, ____ = session.run([self.optimizer, self.loss, self.input_vectors_iter.initializer, self.input_length_iter.initializer, self.input_targets_iter.initializer],\
                                     {self.input_vectors : input_vectors_l, self.input_length : input_length_l, self.input_targets : input_targets_l,\
                                     self.keep_input : 1.0, self.keep_output : 0.5, self.keep_state : 1.0})
                 total_loss += loss
