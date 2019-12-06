@@ -147,7 +147,7 @@ class Generator():
         #End of while
         self.filepos.load(datafile.tell())
 
-        return input_vectors_l, input_length_l, input_targets_l
+        return np.array(input_vectors_l), np.array(input_length_l), np.array(input_targets_l)
             
     def train_real_data(self, num_steps, datafile, save_file_name, restore=True):
         with tf.Session() as session:
@@ -168,17 +168,19 @@ class Generator():
                                     self.keep_input : 1.0, self.keep_output : 0.5, self.keep_state : 1.0})
                 total_loss += loss
                 loss_count += 1
-                if step % 20 == 0 or step == num_steps-1:
+                previous_loss = 0
+                if step % 1 == 0 or step == num_steps-1:
                     #Print average loss
                     print("average loss at {} = {}".format(step, total_loss / loss_count))
+                    previous_loss = total_loss / loss_count
                     total_loss = 0.0
                     loss_count = 0
-                if step % 200 == 0:
+                '''if step % 200 == 0:
                     #Print generated sentences
                     sentences = self.generate(None, 10)
                     for sentence in sentences:
-                        print( ' '.join([token.split("'")[1] for token in sentence]) )
-                if step % 10 == 0:
+                        print( ' '.join([token.split("'")[1] for token in sentence]) )'''
+                if step % 5 == 4 and previous_loss < 4.9:
                     #Save current state
                     self.saver.save(session, save_file_name)
                     train_writer = tf.summary.FileWriter('tmp/gen_log', session.graph)
@@ -199,7 +201,7 @@ class Generator():
         GO_VEC = self.Embedding.word2vec("('<go>', 'Token')")
         EOS_VEC = self.Embedding.word2vec("('<eos>', 'Token')")
         initial_input = [ ( [GO_VEC] + [EOS_VEC]*max(1, self.timesteps-1) )[:self.timesteps] ] * self.batch_size
-        initial_state_random = [ tf.random_normal([self.batch_size, h_size], stddev=0.001, name='initial_state_'+str(h_size)).eval(session=session) for h_size in self.hidden_size ]
+        initial_state_random = [ tf.random_normal([self.batch_size, h_size], stddev=0.1, name='initial_state_'+str(h_size)).eval(session=session) for h_size in self.hidden_size ]
         initial_state_zero = [ tf.zeros([self.batch_size, h_size]).eval(session=session) for h_size in self.hidden_size ]
         
         for k in range((size-1) // self.batch_size + 1):
@@ -230,9 +232,9 @@ class Generator():
                         randfloat = np.random.random()
                         word_cumul_prob = 0.0
                         #Give probability weight
-                        PROBABILITY_EXAGGERATION = 2.0
+                        PROBABILITY_EXAGGERATION = 1.3
                         weighted_prob = np.power(new_word_prob[j, :], PROBABILITY_EXAGGERATION)
-                        AVOID_EOS = 16.0
+                        AVOID_EOS = 4.0
                         weighted_prob[self.Embedding.word2code("('<eos>', 'Token')")] /= AVOID_EOS
                         prob_sum = sum(weighted_prob[1:])
                         for k in range(1, len(weighted_prob[1:])+1):
